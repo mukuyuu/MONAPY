@@ -12,26 +12,30 @@ monachat client with python
 + 一番下にあるエントリーボックスにコマンドを打ち込んでください
 
 ## コマンド
-+ /connect  
++ /login  
  もなちゃとに接続します(入口に入る)
-+ /enter /(ルーム番号)  
++ /room /(ルーム番号)  
  ルーム番号に入ります
-+ /enter(space) ←(space)は半角スペース  
++ /room  
  入口に入ります
-+ /cmt (内容)
- コメントを送信します
 + /set x:18 y:250 scl:100 r:100 name:hogehoge etc..  
  場所などの設定変更
++ /wclose roominfo(or netlog or datalog)  
+ ウィンドウを閉じる
++ /wopen roominfo(or netlog or datalog)
+ ウィンドウを開く
+
+不具合あり：/wclose,/wopen
+その他使わなくていいコマント、/connect,/exit,/enter
 
 ## 表示
 + menu bar  
  そのうち機能が追加されるはず
 + chat log  
- チャット内容を表示します
+ チャット内容を表示します  
 + network log  
- 受信内容をそのまま表示します
+ 受信内容をそのまま表示します  
 + room info  
  部屋の名前と人数、部屋にいるユーザー情報を表示します  
- 男心をくすぐる、プログラムライクな表示!(そのうちちゃんと表示しますorz)
 + entry box  
- ここにいろいろ打ち込んでください
+ ここにいろいろ打ち込んでください  
