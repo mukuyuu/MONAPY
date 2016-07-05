@@ -16,22 +16,22 @@ monachat client with python
  もなちゃとに接続します(入口に入る)
 + /enter /(ルーム番号)  
  ルーム番号に入ります
-+ /enter(space) ←(space)は半角スペース
++ /enter(space) ←(space)は半角スペース  
  入口に入ります
 + /cmt (内容)
  コメントを送信します
-+ /set x:18 y:250 scl:100 r:100 name:hogehoge etc..
++ /set x:18 y:250 scl:100 r:100 name:hogehoge etc..  
  場所などの設定変更
 
 ## 表示
-+ menu bar
++ menu bar  
  そのうち機能が追加されるはず
-+ chat log
++ chat log  
  チャット内容を表示します
-+ net log
++ network log  
  受信内容をそのまま表示します
-+ room info
++ room info  
  部屋の名前と人数、部屋にいるユーザー情報を表示します  
  男心をくすぐる、プログラムライクな表示!(そのうちちゃんと表示しますorz)
-+ entry box
++ entry box  
  ここにいろいろ打ち込んでください
