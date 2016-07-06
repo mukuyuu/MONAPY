@@ -4,7 +4,7 @@ monachat client with python
 + もなちゃと用クライアントです
 + 使用言語：python3.5
 + 予定：早くちゃんとしたクライアントにしたい。いずれbotを組み込むはず…。
-+ 注意：安全性は保証できません、バグが起こるかもしれないで使っていただける方は注意を
++ 注意：例外処理をちゃんとしてないので、コマンドを正しく打ち込まなかったりすると止まる可能性があります。また正しく捜査してもバグがある可能性があります。
 
 ## 使用方法
 + python3.5をインストール
@@ -14,10 +14,18 @@ monachat client with python
 ## コマンド
 + /login  
  もなちゃとに接続します(入口に入る)
-+ /room /(ルーム番号)  
++ /room ルーム番号  
  ルーム番号に入ります
-+ /room  
- 入口に入ります
+ * /room  
+  入口に入ります  
++ /quit  
+ 終了します  
++ /config
+ config.jsonの中身をコンソールに表示
+ * /config save:hoge  
+  hogeという名前で今の状態を記録します  
+ * /config load:hoge  
+  hogeという名前の設定に変更します
 + /set x:18 y:250 scl:100 r:100 name:hogehoge etc..  
  場所などの設定変更
 + /wclose roominfo(or netlog or datalog)  
@@ -26,7 +34,7 @@ monachat client with python
  ウィンドウを開く
 
 不具合あり：/wclose,/wopen
-その他使わなくていいコマント、/connect,/exit,/enter
+その他使わなくていいコマンド、/connect,/exit,/enter
 
 ## 表示
 + menu bar  
