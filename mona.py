@@ -2,14 +2,14 @@
 import codecs
 import datetime
 import json
+import random
 import os
+import queue
 import socket
 import sys
 import threading
 import time
 import tkinter as tk
-import tkinter.messagebox
-import tkinter.scrolledtext as st
 import xml.etree.ElementTree as ET
 
 def connect():
@@ -23,17 +23,10 @@ def connect():
 	if read:
 		readHandler(read.decode())
 	td_sock.start()
-	td_ping.start()
-
-
+	td_wsock.start()
 def login():
 	connect()
 	s.sendall('<ENTER room="/MONA8094" name="monapy" attrib="no"/>\0'.encode())
-
-def ping():
-	while flag_socket:
-		time.sleep(15)
-		s.sendall('<NOP />\0'.encode())
 
 def readHandler(read):
 	global login_id
@@ -112,27 +105,39 @@ def readHandler(read):
 				elif com['style']=='3':
 					com['cmt']='<<'+com['cmt']+'>>'
 			chatlog.writeLog('[{time:%H:%M:%S}]{name}◇{ihash}:{cmt}\n'.format(**com))
+			#repeat
+			bot.read(**msg_root.attrib)
 		elif msg_root.tag=='SET':
 			roominfo.data['user'][msg_root.get('id')].update(msg_root.attrib)
 			roominfo.refresh()
 		elif msg_root.tag=='CONNECT':
 			login_id=msg_root.get('id')
 			print(login_id)
-
 def writeHandler(write):
 	global login_data
-	send_msg=None
 	if write=='': return
 	if write[0]!='/':
-		send_msg=ET.tostring(ET.Element('COM',{'cmt':write})).decode()
+		if 'Shift_R' in keypressed or 'Shift_L' in keypressed:
+			q_write.put(ET.tostring(ET.Element('COM',{'cmt':write,'style':'2'})).decode())
+		elif 'F1' in keypressed:
+			q_write.put(ET.tostring(ET.Element('COM',{'cmt':write,'style':'3'})).decode())
+		elif 'Up' in keypressed:
+			q_write.put(ET.tostring(ET.Element('SET',{'stat':write})).decode())
+		else:
+			q_write.put(ET.tostring(ET.Element('COM',{'cmt':write})).decode())
 	else:
 		com_list=write.split()
+		#handle chat
 		if com_list[0]=='/room':
-			s.sendall('<EXIT />\0'.encode())
-			roominfo.data['enter']='/'+com_list[1] if len(com_list)>1 else ''
-			room={'room':'/MONA8094'+roominfo.data['enter']}
-			room.update(login_data)
-			send_msg=ET.tostring(ET.Element('ENTER',room)).decode()
+			q_write.put('<EXIT />')
+			if len(com_list)>1:
+				roominfo.data['enter']=com_list[1]
+				room={'room':'/MONA8094/'+com_list[1]}
+				room.update(login_data)
+				q_write.put(ET.tostring(ET.Element('ENTER',room)).decode())
+			else:
+				roominfo.data['enter']='入口'
+				q_write.put('<ENTER room="/MONA8094" name="monapy" attrib="no"/>')
 
 			roominfo.data['user']={}
 			roominfo.data['room']={}
@@ -142,16 +147,16 @@ def writeHandler(write):
 				key,value=prop.split(':')
 				com[key]=value
 				login_data[key]=value
-			send_msg=ET.tostring(ET.Element('SET',com)).decode()
+			q_write.put(ET.tostring(ET.Element('SET',com)).decode())
 		elif com_list[0]=='/ig':
 			pass
 		elif com_list[0]=='/enter':
 			roominfo.data['enter']='/'+com_list[1] if len(com_list)>1 else ''
 			room={'room':'/MONA8094'+roominfo.data['enter']}
 			room.update(login_data)
-			send_msg=ET.tostring(ET.Element('ENTER',room)).decode()
+			q_write.put(ET.tostring(ET.Element('ENTER',room)).decode())
 		elif com_list[0]=='/exit':
-			s.sendall('<EXIT />\0'.encode())
+			q_write.put('<EXIT />')
 			roominfo.data['user']={}
 			roominfo.data['room']={}
 		elif com_list[0]=='/login':
@@ -160,13 +165,24 @@ def writeHandler(write):
 			quit()
 		elif com_list[0]=='/connect':
 			connect()
+		#bot like
+		elif com_list[0]=='/copy':
+			login_data=roominfo.data['user'][com_list[1]]
+			writeHandler('/room {n}'.format(roominfo.data['here']))
+		elif com_list[0]=='/repeat':
+			if len(com_list)>1:
+				bot.repeat_ihash=roominfo.data['user'][com_list[1]]['ihash']
+			else:
+				bot.repeat_ihash=''
+		#handle data
 		elif com_list[0]=='/config':
 			if len(com_list)<2:
 				print(config)
 			else:
 				k,v=com_list[1].split(':')
 				if k=='save': config[v]=login_data
-				if k=='load': login_data=config[v]; writeHandler('/room {0}'.format(roominfo.data['enter'][1:]))
+				if k=='load': login_data=config[v];
+		#handle window
 		elif com_list[0]=='/wclose':
 			if com_list[1]=='roominfo': roominfo.frame.pack_forget()
 			if com_list[1]=='chatlog': chatlog.frame.pack_forget()
@@ -175,8 +191,6 @@ def writeHandler(write):
 			if com_list[1]=='roominfo': roominfo.frame.pack(fill='both',expand=True)
 			if com_list[1]=='chatlog': chatlog.frame.pack(side="left",fill='both',expand=True)
 			if com_list[1]=='netlog': netlog.frame.pack(side="left",fill='both',expand=True)
-	if send_msg!=None:
-		s.sendall((send_msg+'\0').encode())
 
 def readSocket():
 	global flag_socket
@@ -186,17 +200,25 @@ def readSocket():
 			readHandler(read.decode())
 		else:
 			time.sleep(0.1)
-def writeSocket(text):
-	pass
+def writeSocket():
+	pstart=time.time()
+	while flag_socket:
+		time.sleep(0.4)
+		if time.time()-pstart>15:
+			s.sendall('<NOP />\0'.encode())
+			pstart=time.time()
+		if not q_write.empty():
+			msg=q_write.get()
+			s.sendall((msg+'\0').encode())
 
 def quit():
 	global flag_socket
 	if flag_socket:
 		flag_socket=False
 		#save chatlog
-		chatlog.save()
+		if 'chatlog' in autosave:
+			chatlog.save()
 		#save config and trip
-		print(config,trip)
 		with open('./data/config.json','bw') as f:
 			f.write(json.dumps(config,ensure_ascii=False,indent=2,sort_keys=True).encode())
 		with open('./data/trip.json','bw') as f:
@@ -215,14 +237,13 @@ class EntryBox:
 		text=self.entry.get()
 		self.entry.delete(first=0,last=tk.END)
 		writeHandler(text)
-
 class Menu:
 	def __init__(self,master):
 		menu=tk.Menu(master)
 		master.config(menu=menu)
 
 		filemenu=tk.Menu(menu)
-		filemenu.add_command(label="Save log",command=self.saveLog)
+		filemenu.add_command(label="Save chatlog",command=self.saveLog)
 		filemenu.add_separator()
 		filemenu.add_command(label="Close",command=quit)
 
@@ -279,12 +300,13 @@ class ChatLog:
 			f.write(self.text.get('0.0',tk.END))
 			self.text.delete('0.0',tk.END)
 			self.text.config(state=tk.DISABLED)			
-
-class NetworkLog:
+class DiaLog:
+	pass
+class NetLog:
 	def __init__(self,parent):
 		#frame
 		self.frame=tk.Frame(parent)#self.frame=tk.Frame(parent,width=320,height=480)
-		self.label=tk.Label(self.frame,text='Network Log')
+		self.label=tk.Label(self.frame,text='Net Log')
 		#netlog
 		self.text=tk.Text(self.frame,bd=0,width=5,font="Arial 10")
 		self.text.config(state=tk.DISABLED)
@@ -308,7 +330,6 @@ class NetworkLog:
 			f.write(self.text.get('0.0',tk.END))
 			self.text.delete('0.0',tk.END)
 			self.text.config(state=tk.DISABLED)			
-
 class RoomInfo:
 	def __init__(self):
 		self.data={}
@@ -340,21 +361,49 @@ class RoomInfo:
 		#write roominfo
 		self.text.insert(tk.END,'HERE\nRoom{n}({c})\n'.format(**self.data['here']))
 		self.text.insert(tk.END,'ROOM\n')
-		for k,v in self.data['room'].items():
-			self.text.insert(tk.END,'Room{0}({1})\t'.format(k,v))
+		for k in sorted(self.data['room'].keys(),key=lambda x: int(x) if x.isdigit() else 0):
+			self.text.insert(tk.END,'Room{0}({1})\t'.format(k,self.data['room'][k]))
 		self.text.insert(tk.END,'\nUSER\n')
-		for k,v in self.data['user'].items():
+		users={}
+		users.update(self.data['user'])
+		for v in sorted(users.values(),key=lambda x:int(x['x']) if ('x' in x and x['x'].isdigit())else 0):
 			if not 'name' in v: v['name']='hoge'
 			if not 'stat' in v: v['stat']='hoge'
 			if not 'ihash' in v: v['ihash']='hoge'
 			if not 'type' in v: v['type']='hoge'
-			self.text.insert(tk.END,'({id}){name}◇{ihash}:{stat}[{type}]\n'.format(**v))
+			if not 'trip' in v: v['disptrip']=''
+			else: v['disptrip']='◆'+v['trip']
+			self.text.insert(tk.END,'({id}){name}◇{ihash}{disptrip}:{stat}[{type}]\n'.format(**v))
 		self.text.config(state=tk.DISABLED)
+class Bot:
+	def __init__(self):
+		self.bot_on=True
+		self.repeat_ihash=''
+		with open('./data/autoreply.json',encoding='utf-8') as f:
+			self.autoreply=json.loads(f.read(),'utf-8')
+			print('wa-i')
+
+	def read(self,**com):
+		if self.bot_on==False or com['id']==login_id: return
+		if roominfo.data['user'][com['id']]['ihash']==self.repeat_ihash:
+			q_write.put(ET.tostring(ET.Element('COM',{'cmt':com['cmt']})).decode())
+		for word in self.autoreply:
+			if word in com['cmt']:
+				writeHandler(random.choice(self.autoreply[word]))
+
+def onKeyPress(event):
+	global keypressed
+	if not event.keysym in keypressed:
+		keypressed.append(event.keysym)
+def onKeyRelease(event):
+	global keypressed
+	keypressed=[]
 if __name__ == '__main__':
 	#data
 	roominfo=RoomInfo()
 	login_id=0
 	login_data={'type':'kyaku','name':'nanasi','x':'80','y':'275','r':'50','g':'50','b':'100','scl':'100','stat':'monapy'}
+	autosave=[]
 
 	if not os.path.exists('./data'):
 		os.makedirs('./data')
@@ -373,21 +422,26 @@ if __name__ == '__main__':
 	#junbi
 	s=socket.socket(socket.AF_INET,socket.SOCK_STREAM)
 	td_sock=threading.Thread(target=readSocket,daemon=True)
-	td_ping=threading.Thread(target=ping,daemon=True)
+	td_wsock=threading.Thread(target=writeSocket,daemon=True)
+	q_write=queue.Queue()
 	flag_socket=False
 
+	bot=Bot()
 	#window
 	root=tk.Tk()
 	root.title('★MONAPY★')
 	root.geometry("640x480")
 	root.config(bg='#d0d0f3')
 	root.protocol("WM_DELETE_WINDOW",quit)
+	keypressed=[]
+	root.bind('<KeyPress>',onKeyPress)
+	root.bind('<KeyRelease>',onKeyRelease)
 	#widget
 	menu=Menu(root)
 	entrybox=EntryBox(root)
 	fm0=tk.Frame(root)
 	chatlog=ChatLog(fm0)
-	netlog=NetworkLog(fm0)
+	netlog=NetLog(fm0)
 	roominfo.makeDisp(fm0)
 	#pack#fm1.pack(side='left',fill='both',expand=True)#fm1.place(x=320,y=0,width=320,height=480)
 	fm0.pack(fill=tk.BOTH,expand=True)
