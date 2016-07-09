@@ -32,7 +32,8 @@ def readHandler(read):
 	global login_id
 	msg_list=read.rstrip('\0').split('\0')
 	for line in msg_list:
-		netlog.writeLog(line+'\n')
+		#netlog.writeLog(line+'\n')
+		pass
 	for i in range(len(msg_list)):
 		try:
 			msg_root=ET.fromstring(msg_list[i])
@@ -186,11 +187,9 @@ def writeHandler(write):
 		elif com_list[0]=='/wclose':
 			if com_list[1]=='roominfo': roominfo.frame.pack_forget()
 			if com_list[1]=='chatlog': chatlog.frame.pack_forget()
-			if com_list[1]=='netlog': netlog.frame.pack_forget()
 		elif com_list[0]=='/wopen':
 			if com_list[1]=='roominfo': roominfo.frame.pack(fill='both',expand=True)
 			if com_list[1]=='chatlog': chatlog.frame.pack(side="left",fill='both',expand=True)
-			if com_list[1]=='netlog': netlog.frame.pack(side="left",fill='both',expand=True)
 
 def readSocket():
 	global flag_socket
@@ -302,34 +301,6 @@ class ChatLog:
 			self.text.config(state=tk.DISABLED)			
 class DiaLog:
 	pass
-class NetLog:
-	def __init__(self,parent):
-		#frame
-		self.frame=tk.Frame(parent)#self.frame=tk.Frame(parent,width=320,height=480)
-		self.label=tk.Label(self.frame,text='Net Log')
-		#netlog
-		self.text=tk.Text(self.frame,bd=0,width=5,font="Arial 10")
-		self.text.config(state=tk.DISABLED)
-		#scrollbar
-		self.scrollbar=tk.Scrollbar(self.frame,command=self.text.yview,cursor="star")
-		self.text['yscrollcommand']=self.scrollbar.set
-		#place
-		self.frame.pack(side="left",fill='both',expand=True)#self.frame.place(x=0,y=0,width=320,height=480)
-		self.label.pack()
-		self.scrollbar.pack(side="right",fill=tk.Y,)
-		self.text.pack(side="left",fill=tk.BOTH,expand=True)
-		self.frame.pack_forget()
-	def writeLog(self,string):
-		self.text.config(state=tk.NORMAL)
-		self.text.insert('end',string)
-		self.text.config(state=tk.DISABLED)
-		self.text.yview(tk.END)
-	def save(self):
-		with open('./data/netlog.txt','a') as f:
-			self.text.config(state=tk.NORMAL)
-			f.write(self.text.get('0.0',tk.END))
-			self.text.delete('0.0',tk.END)
-			self.text.config(state=tk.DISABLED)			
 class RoomInfo:
 	def __init__(self):
 		self.data={}
@@ -441,7 +412,6 @@ if __name__ == '__main__':
 	entrybox=EntryBox(root)
 	fm0=tk.Frame(root)
 	chatlog=ChatLog(fm0)
-	netlog=NetLog(fm0)
 	roominfo.makeDisp(fm0)
 	#pack#fm1.pack(side='left',fill='both',expand=True)#fm1.place(x=320,y=0,width=320,height=480)
 	fm0.pack(fill=tk.BOTH,expand=True)
