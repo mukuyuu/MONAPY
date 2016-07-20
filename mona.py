@@ -11,6 +11,8 @@ import threading
 import time
 import tkinter as tk
 import xml.etree.ElementTree as ET
+#myown module
+from canvas import *
 
 def connect():
 	global flag_socket
@@ -27,189 +29,12 @@ def connect():
 def login():
 	connect()
 	s.sendall('<ENTER room="/MONA8094" name="monapy" attrib="no"/>\0'.encode())
-
-def readHandler(read):
-	global login_id
-	msg_list=read.rstrip('\0').split('\0')
-	for line in msg_list:
-		#netlog.writeLog(line+'\n')
-		pass
-	for i in range(len(msg_list)):
-		try:
-			msg_root=ET.fromstring(msg_list[i])
-		except:print('not proper xml:',msg_list[i]);continue
-		#COUNT - ROOM
-		#ROOM - USER
-		#UINFO
-		#EXIT
-		#ENTER
-		#COM
-		#SET
-		#CONNECT
-		if msg_root.tag=='COUNT':
-			if msg_root.get('c')!=None and int(msg_root.get('c'))>0:
-				roominfo.data['here'].update(msg_root.attrib)
-			for e in msg_root:
-				if e.tag=='ROOM':	
-					roominfo.data['room'][e.get('n')]=e.get('c')
-					if not int(e.get('c'))>0:
-						del roominfo.data['room'][e.get('n')]
-			roominfo.refresh()
-		elif msg_root.tag=='ROOM':
-			chatlog.writeLog('----------------------\n')
-			for e in msg_root:
-				if e.tag=='USER':
-					roominfo.data['user'][e.get('id')]=e.attrib
-					#save trip
-					if not e.get('ihash') in trip: trip[e.get('ihash')]=[e.get('name')]
-					trip[e.get('ihash')]=list(set(trip[e.get('ihash')]+[e.get('name')]))
-		elif msg_root.tag=='UINFO':
-			roominfo.data['user'][msg_root.get('id')]=msg_root.attrib
-		elif msg_root.tag=='EXIT':
-			chat={}
-			chat['time']=datetime.datetime.now()
-			chat.update(msg_root.attrib)
-			if chat['id'] in roominfo.data['user']:
-				chat.update(roominfo.data['user'][chat['id']])
-				chatlog.writeLog('[{time:%H:%M:%S}]<<({id}){name}◇{ihash}\n'.format(**chat))
-			else:
-				chatlog.writeLog('<<({id})\n'.format(**chat))
-
-			roominfo.data['user'].pop(msg_root.get('id'),None)
-		elif msg_root.tag=='ENTER':
-			#自分が入室するとき
-			if msg_root.get('id')==login_id:
-				chatlog.writeLog('---- Room{0} ----\n'.format(roominfo.data['enter']))
-			roominfo.data['user'][msg_root.get('id')]={'name':'','ihash':''}
-			roominfo.data['user'][msg_root.get('id')].update(msg_root.attrib)
-
-			chat={}
-			chat['time']=datetime.datetime.now()
-			chat.update(msg_root.attrib)
-			if chat['id'] in roominfo.data['user']:
-				chat.update(roominfo.data['user'][chat['id']])
-				chatlog.writeLog('[{time:%H:%M:%S}]>>({id}){name}◇{ihash}\n'.format(**chat))
-			else:
-				chatlog.writeLog('>>({id})\n'.format(**chat))
-			try:
-				if not msg_root.get('ihash') in trip: trip[msg_root.get('ihash')]=[]
-				trip[msg_root.get('ihash')]=list(set(trip[msg_root.get('ihash')]+[msg_root.get('name')]))
-			except:pass
-		elif msg_root.tag=='COM':
-			com={}
-			com['time']=datetime.datetime.now()
-			com.update(msg_root.attrib)
-			com.update(roominfo.data['user'][com['id']])
-			if 'style' in com:
-				if com['style']=='2':
-					com['cmt']='.｡o('+com['cmt']+')'
-				elif com['style']=='3':
-					com['cmt']='<<'+com['cmt']+'>>'
-			chatlog.writeLog('[{time:%H:%M:%S}]{name}◇{ihash}:{cmt}\n'.format(**com))
-			#repeat
-			bot.read(**msg_root.attrib)
-		elif msg_root.tag=='SET':
-			roominfo.data['user'][msg_root.get('id')].update(msg_root.attrib)
-			roominfo.refresh()
-		elif msg_root.tag=='CONNECT':
-			login_id=msg_root.get('id')
-			print(login_id)
-def writeHandler(write):
-	global login_data
-	if write=='': return
-	if write[0]!='/':
-		if 'Shift_R' in keypressed or 'Shift_L' in keypressed:
-			q_write.put(ET.tostring(ET.Element('COM',{'cmt':write,'style':'2'})).decode())
-		elif 'F1' in keypressed:
-			q_write.put(ET.tostring(ET.Element('COM',{'cmt':write,'style':'3'})).decode())
-		elif 'Up' in keypressed:
-			q_write.put(ET.tostring(ET.Element('SET',{'stat':write})).decode())
-		else:
-			q_write.put(ET.tostring(ET.Element('COM',{'cmt':write})).decode())
-	else:
-		com_list=write.split()
-		#handle chat
-		if com_list[0]=='/room':
-			q_write.put('<EXIT />')
-			if len(com_list)>1:
-				roominfo.data['enter']=com_list[1]
-				room={'room':'/MONA8094/'+com_list[1]}
-				room.update(login_data)
-				q_write.put(ET.tostring(ET.Element('ENTER',room)).decode())
-			else:
-				roominfo.data['enter']='入口'
-				q_write.put('<ENTER room="/MONA8094" name="monapy" attrib="no"/>')
-
-			roominfo.data['user']={}
-			roominfo.data['room']={}
-		elif com_list[0]=='/set':
-			com={}
-			for prop in com_list[1:]:
-				key,value=prop.split(':')
-				com[key]=value
-				login_data[key]=value
-			q_write.put(ET.tostring(ET.Element('SET',com)).decode())
-		elif com_list[0]=='/ig':
-			pass
-		elif com_list[0]=='/enter':
-			roominfo.data['enter']='/'+com_list[1] if len(com_list)>1 else ''
-			room={'room':'/MONA8094'+roominfo.data['enter']}
-			room.update(login_data)
-			q_write.put(ET.tostring(ET.Element('ENTER',room)).decode())
-		elif com_list[0]=='/exit':
-			q_write.put('<EXIT />')
-			roominfo.data['user']={}
-			roominfo.data['room']={}
-		elif com_list[0]=='/login':
-			login()
-		elif com_list[0]=='/quit':
-			quit()
-		elif com_list[0]=='/connect':
-			connect()
-		#bot like
-		elif com_list[0]=='/copy':
-			login_data=roominfo.data['user'][com_list[1]]
-			writeHandler('/room {n}'.format(roominfo.data['here']))
-		elif com_list[0]=='/repeat':
-			if len(com_list)>1:
-				bot.repeat_ihash=roominfo.data['user'][com_list[1]]['ihash']
-			else:
-				bot.repeat_ihash=''
-		#handle data
-		elif com_list[0]=='/config':
-			if len(com_list)<2:
-				print(config)
-			else:
-				k,v=com_list[1].split(':')
-				if k=='save': config[v]=login_data
-				if k=='load': login_data=config[v];
-		#handle window
-		elif com_list[0]=='/wclose':
-			if com_list[1]=='roominfo': roominfo.frame.pack_forget()
-			if com_list[1]=='chatlog': chatlog.frame.pack_forget()
-		elif com_list[0]=='/wopen':
-			if com_list[1]=='roominfo': roominfo.frame.pack(fill='both',expand=True)
-			if com_list[1]=='chatlog': chatlog.frame.pack(side="left",fill='both',expand=True)
-
-def readSocket():
+def disconnect():
 	global flag_socket
-	while flag_socket:
-		read=s.recv(16384)#8192
-		if read:
-			readHandler(read.decode())
-		else:
-			time.sleep(0.1)
-def writeSocket():
-	pstart=time.time()
-	while flag_socket:
-		time.sleep(0.4)
-		if time.time()-pstart>15:
-			s.sendall('<NOP />\0'.encode())
-			pstart=time.time()
-		if not q_write.empty():
-			msg=q_write.get()
-			s.sendall((msg+'\0').encode())
-
+	if flag_socket:
+		flag_socket=False
+		s.shutdown(socket.SHUT_RDWR)
+		s.close()
 def quit():
 	global flag_socket
 	if flag_socket:
@@ -226,7 +51,209 @@ def quit():
 		s.shutdown(socket.SHUT_RDWR)
 		s.close()
 	root.destroy()
+	
+def readHandler(read):
+	global login_id
+	msg_list=read.rstrip('\0').split('\0')
+	for line in msg_list:
+		#netlog.writeLog(line+'\n')
+		pass
+	for i in range(len(msg_list)):
+		try:
+			msg_root=ET.fromstring(msg_list[i])
+			#COUNT - ROOM
+			#ROOM - USER
+			#UINFO
+			#EXIT
+			#ENTER
+			#COM
+			#SET
+			#CONNECT
+			if msg_root.tag=='COUNT':
+				if msg_root.get('c')!=None and int(msg_root.get('c'))>0:
+					roominfo.data['here'].update(msg_root.attrib)
+				for e in msg_root:
+					if e.tag=='ROOM':	
+						roominfo.data['room'][e.get('n')]=e.get('c')
+						if not int(e.get('c'))>0:
+							del roominfo.data['room'][e.get('n')]
+				roominfo.refreshText()
+			elif msg_root.tag=='ROOM':
+				chatlog.writeLog('----------------------\n')
+				for e in msg_root:
+					if e.tag=='USER':
+						roominfo.data['user'][e.get('id')]=e.attrib
+						roominfo.disp.createChara(e.attrib)
+						#save trip
+						if not e.get('ihash') in trip: trip[e.get('ihash')]=[e.get('name')]
+						trip[e.get('ihash')]=list(set(trip[e.get('ihash')]+[e.get('name')]))
+			elif msg_root.tag=='UINFO':
+				roominfo.data['user'][msg_root.get('id')]=msg_root.attrib
+				roominfo.disp.createChara(msg_root.attrib)
+			elif msg_root.tag=='EXIT':
+				chat={}
+				chat['time']=datetime.datetime.now()
+				chat.update(msg_root.attrib)
+				if chat['id'] in roominfo.data['user']:
+					chat.update(roominfo.data['user'][chat['id']])
+					chatlog.writeLog('[{time:%H:%M:%S}]<<({id}){name}◇{ihash}\n'.format(**chat))
+				else:
+					chatlog.writeLog('<<({id})\n'.format(**chat))
 
+				roominfo.data['user'].pop(msg_root.get('id'),None)
+				roominfo.disp.deleteChara(msg_root.get('id'))
+			elif msg_root.tag=='ENTER':
+				#自分が入室するとき
+				if msg_root.get('id')==login_id:
+					chatlog.writeLog('---- Room{0} ----\n'.format(roominfo.data['enter']))
+				roominfo.data['user'][msg_root.get('id')]={'name':'','ihash':''}
+				roominfo.data['user'][msg_root.get('id')].update(msg_root.attrib)
+				roominfo.disp.createChara(msg_root.attrib)
+
+				chat={}
+				chat['time']=datetime.datetime.now()
+				chat.update(msg_root.attrib)
+				chat['disptrip']='' if not 'trip' in chat else ('◆'+chat['trip'])
+				if chat['id'] in roominfo.data['user']:
+					chat.update(roominfo.data['user'][chat['id']])
+					chatlog.writeLog('[{time:%H:%M:%S}]>>({id}){name}◇{ihash}{disptrip}\n'.format(**chat))
+				else:
+					chatlog.writeLog('>>({id})\n'.format(**chat))
+				try:
+					#add trip
+					if not msg_root.get('ihash') in trip: trip[msg_root.get('ihash')]=[]
+					trip[msg_root.get('ihash')]=list(set(trip[msg_root.get('ihash')]+[msg_root.get('name')]))
+				except:pass
+			elif msg_root.tag=='COM':
+				com={}
+				com['time']=datetime.datetime.now()
+				com.update(msg_root.attrib)
+				com.update(roominfo.data['user'][com['id']])
+				if 'style' in com:
+					if com['style']=='2':
+						com['cmt']='.｡o('+com['cmt']+')'
+					elif com['style']=='3':
+						com['cmt']='<<'+com['cmt']+'>>'
+				chatlog.writeLog('[{time:%H:%M:%S}]{name}◇{ihash}:{cmt}\n'.format(**com))
+				#roominfo.disp.handleCom(**msg_root.attrib)
+				#bot
+				bot.read(**msg_root.attrib)
+			elif msg_root.tag=='SET':
+				roominfo.data['user'][msg_root.get('id')].update(msg_root.attrib)
+				roominfo.refreshText()
+				roominfo.disp.handleSet(**msg_root.attrib)
+			elif msg_root.tag=='CONNECT':
+				login_id=msg_root.get('id')
+				print(login_id)
+		except Exception as ex:
+			print('\ntype:',str(type(ex)))
+			print('args:',str(ex.args))
+			print('not proper xml:',msg_list[i].encode('utf-8').decode(sys.stdout.encoding,'ignore'));continue
+def writeHandler(write):
+	global login_data
+	if write=='': return
+	if write[0]!='/':
+		if 'Shift_R' in keypressed or 'Shift_L' in keypressed:
+			q_write.put(['COM',{'cmt':write,'style':'2'}])
+		elif 'F1' in keypressed:
+			q_write.put(['COM',{'cmt':write,'style':'3'}])
+		elif 'Up' in keypressed:
+			q_write.put(['SET',{'stat':write}])
+		else:
+			q_write.put(['COM',{'cmt':write}])
+	else:
+		com_list=write.split()
+		#handle chat
+		if com_list[0]=='/room':
+			q_write.put(['EXIT',{}])
+			if len(com_list)>1:
+				roominfo.data['enter']=com_list[1]
+				room={'room':'/MONA8094/'+com_list[1]}
+				room.update(login_data)
+				q_write.put(['ENTER',room])
+			else:
+				roominfo.data['enter']='入口'
+				q_write.put(['ENTER',{'room':"/MONA8094",'name':"monapy",'attrib':"no"}])
+
+			roominfo.data['user']={}
+			roominfo.data['room']={}
+			roominfo.disp.refresh()
+		elif com_list[0]=='/set':
+			com={}
+			for prop in com_list[1:]:
+				key,value=prop.split(':')
+				com[key]=value
+				login_data[key]=value
+			q_write.put(['SET',com])
+		elif com_list[0]=='/ig':
+			pass
+		elif com_list[0]=='/enter':
+			roominfo.data['enter']='/'+com_list[1] if len(com_list)>1 else ''
+			room={'room':'/MONA8094'+roominfo.data['enter']}
+			room.update(login_data)
+			q_write.put(['ENTER',room])
+		elif com_list[0]=='/exit':
+			q_write.put(['EXIT',{}])
+			roominfo.data['user']={}
+			roominfo.disp.refresh()
+			roominfo.data['room']={}
+		elif com_list[0]=='/login':
+			login()
+		elif com_list[0]=='/quit':
+			quit()
+		elif com_list[0]=='/connect':
+			connect()
+		#bot like
+		elif com_list[0]=='/bot':
+			bot.bot_on=not bot.bot_on
+		elif com_list[0]=='/copy':
+			login_data=roominfo.data['user'][com_list[1]]
+			writeHandler('/room {n}'.format(roominfo.data['here']))
+		elif com_list[0]=='/repeat':
+			if len(com_list)>1:
+				bot.repeat_ihash=roominfo.data['user'][com_list[1]]['ihash']
+			else:
+				bot.repeat_ihash=''
+		#handle data
+		elif com_list[0]=='/config':
+			if len(com_list)<2:
+				print(config)
+			else:
+				k,v=com_list[1].split(':')
+				if k=='save': config[v]=login_data
+				if k=='load': login_data=config[v]
+		#handle window
+		elif com_list[0]=='/wclose':
+			if com_list[1]=='roominfo': roominfo.frame.pack_forget()
+			if com_list[1]=='chatlog': chatlog.frame.pack_forget()
+		elif com_list[0]=='/wopen':
+			if com_list[1]=='roominfo': roominfo.frame.pack(fill='both',expand=True)
+			if com_list[1]=='chatlog': chatlog.frame.pack(side="left",fill='both',expand=True)
+			if com_list[1]=='disp':
+				roominfo.dispRoot=tk.Toplevel()
+				roominfo.disp=Disp(roominfo.dispRoot)
+				roominfo.disp.pack(fill=tk.BOTH,expand=True)
+def readSocket():
+	global flag_socket
+	while flag_socket:
+		read=s.recv(16384)#8192
+		if read:
+			readHandler(read.decode('utf-8','replace'))
+		else:
+			time.sleep(0.1)
+def writeSocket():
+	pstart=time.time()
+	while flag_socket:
+		time.sleep(0.4)
+		if time.time()-pstart>15:
+			s.sendall('<NOP />\0'.encode())
+			pstart=time.time()
+			time.sleep(0.3)
+			continue
+		if not q_write.empty():
+			tag,attrib=q_write.get()
+			s.sendall((ET.tostring(ET.Element(tag,attrib)))+'\0'.encode())
+			time.sleep(0.3)
 class EntryBox:
 	def __init__(self,parent):
 		self.entry=tk.Entry(parent,width=200,font='Arial 14')
@@ -326,18 +353,23 @@ class RoomInfo:
 		self.text.pack(fill='both',expand=True)
 		self.frame.pack(fill='both',expand=True)
 
-	def refresh(self):
+		#DISPLAY
+		self.dispRoot=tk.Toplevel()
+		self.disp=Disp(self.dispRoot)
+		self.disp.pack(fill=tk.BOTH,expand=True)
+
+	def refreshText(self):
 		self.text.config(state=tk.NORMAL)
 		self.text.delete('0.0',tk.END)
 		#write roominfo
 		self.text.insert(tk.END,'HERE\nRoom{n}({c})\n'.format(**self.data['here']))
 		self.text.insert(tk.END,'ROOM\n')
-		for k in sorted(self.data['room'].keys(),key=lambda x: int(x) if x.isdigit() else 0):
+		for k in sorted(self.data['room'].keys(),key=lambda x: int(x) if str(x).isdigit() else 0):
 			self.text.insert(tk.END,'Room{0}({1})\t'.format(k,self.data['room'][k]))
 		self.text.insert(tk.END,'\nUSER\n')
 		users={}
 		users.update(self.data['user'])
-		for v in sorted(users.values(),key=lambda x:int(x['x']) if ('x' in x and x['x'].isdigit())else 0):
+		for v in sorted(users.values(),key=lambda x:int(x['x']) if ('x' in x and str(x['x']).isdigit())else 0):
 			if not 'name' in v: v['name']='hoge'
 			if not 'stat' in v: v['stat']='hoge'
 			if not 'ihash' in v: v['ihash']='hoge'
@@ -349,19 +381,23 @@ class RoomInfo:
 class Bot:
 	def __init__(self):
 		self.bot_on=True
+		self.last_time=0
 		self.repeat_ihash=''
-		with open('./data/autoreply.json',encoding='utf-8') as f:
-			self.autoreply=json.loads(f.read(),'utf-8')
-			print('wa-i')
-
+		try:
+			with open('./data/autoreply.json',encoding='utf-8') as f:
+				self.autoreply=json.loads(f.read(),'utf-8')
+				print('wa-i')
+		except:
+			self.autoreply={}
 	def read(self,**com):
 		if self.bot_on==False or com['id']==login_id: return
+		#repeat
 		if roominfo.data['user'][com['id']]['ihash']==self.repeat_ihash:
-			q_write.put(ET.tostring(ET.Element('COM',{'cmt':com['cmt']})).decode())
+			q_write.put(['COM',{'cmt':com['cmt']}])
+		#autoreply
 		for word in self.autoreply:
 			if word in com['cmt']:
 				writeHandler(random.choice(self.autoreply[word]))
-
 def onKeyPress(event):
 	global keypressed
 	if not event.keysym in keypressed:
@@ -373,8 +409,9 @@ if __name__ == '__main__':
 	#data
 	roominfo=RoomInfo()
 	login_id=0
-	login_data={'type':'kyaku','name':'nanasi','x':'80','y':'275','r':'50','g':'50','b':'100','scl':'100','stat':'monapy'}
-	autosave=[]
+	login_data={'type':'kyaku','name':'nanasi','stat':'monapy',
+		'x':'80','y':'275','r':'50','g':'50','b':'100','scl':'100'}
+	autosave=['chatlog']
 
 	if not os.path.exists('./data'):
 		os.makedirs('./data')
